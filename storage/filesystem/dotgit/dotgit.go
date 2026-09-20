@@ -798,6 +798,9 @@ func (d *DotGit) Ref(name plumbing.ReferenceName) (*plumbing.Reference, error) {
 	if err == nil {
 		return ref, nil
 	}
+	if !os.IsNotExist(err) {
+		return nil, err
+	}
 
 	return d.packedRef(name)
 }

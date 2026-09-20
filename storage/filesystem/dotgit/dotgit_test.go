@@ -363,6 +363,15 @@ func (s *SuiteDotGit) TestRefsFromReferenceFile(c *C) {
 	c.Assert(string(ref.Target()), Equals, "refs/remotes/origin/master")
 }
 
+func (s *SuiteDotGit) TestRefPreservesLooseReferenceError(c *C) {
+	fs := memfs.New()
+	c.Assert(fs.MkdirAll("HEAD", 0o755), IsNil)
+
+	ref, err := New(fs).Ref(plumbing.HEAD)
+	c.Assert(ref, IsNil)
+	c.Assert(err, Equals, ErrIsDir)
+}
+
 func BenchmarkRefMultipleTimes(b *testing.B) {
 	fs := fixtures.Basic().ByTag(".git").One().DotGit()
 	refname := plumbing.ReferenceName("refs/remotes/origin/branch")
