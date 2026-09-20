@@ -173,7 +173,34 @@ func (fs *Filesystem) plaintextSize(filename string) (int64, error) {
 }
 
 func (fs *Filesystem) Rename(oldpath, newpath string) error {
-	return fs.base.Rename(oldpath, newpath)
+	oldFile, err := fs.base.Open(oldpath)
+	if err != nil {
+		return err
+	}
+	oldKey := fs.fileKey(oldFile.Name())
+	if err := oldFile.Close(); err != nil {
+		return err
+	}
+	fs.open.mu.Lock()
+	defer fs.open.mu.Unlock()
+	if err := fs.base.Rename(oldpath, newpath); err != nil {
+		return err
+	}
+	state := fs.open.files[oldKey]
+	if state == nil {
+		return nil
+	}
+	newFile, err := fs.base.Open(newpath)
+	if err != nil {
+		return err
+	}
+	newKey := fs.fileKey(newFile.Name())
+	if err := newFile.Close(); err != nil {
+		return err
+	}
+	delete(fs.open.files, oldKey)
+	fs.open.files[newKey] = state
+	return nil
 }
 
 func (fs *Filesystem) Remove(filename string) error {
@@ -404,7 +431,11 @@ func (file *file) Close() error {
 	file.filesystem.open.mu.Lock()
 	file.state.refs--
 	if file.state.refs == 0 {
-		delete(file.filesystem.open.files, file.key)
+		for key, state := range file.filesystem.open.files {
+			if state == file.state {
+				delete(file.filesystem.open.files, key)
+			}
+		}
 	}
 	file.filesystem.open.mu.Unlock()
 	return errors.Join(flushErr, closeErr)

@@ -86,6 +86,55 @@ func TestFilesystemTempFileSharedReadAndRename(t *testing.T) {
 	}
 }
 
+func TestFilesystemRenameSharesOpenWriterState(t *testing.T) {
+	filesystem, err := encoded.New(osfs.New(t.TempDir()), testCodec{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer, err := filesystem.TempFile("", "incoming-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.Write([]byte("pack contents")); err != nil {
+		t.Fatal(err)
+	}
+	destination := "pack-test.pack"
+	if err := filesystem.Rename(writer.Name(), destination); err != nil {
+		t.Fatal(err)
+	}
+	reader, err := filesystem.Open(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != "pack contents" {
+		t.Fatalf("renamed open contents = %q", contents)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := filesystem.Open(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents, err = io.ReadAll(reopened)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reopened.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != "pack contents" {
+		t.Fatalf("reopened contents = %q", contents)
+	}
+}
+
 func TestFilesystemCloneCommitAndReopen(t *testing.T) {
 	source := t.TempDir()
 	sourceRepository, err := git.PlainInit(source, false)
